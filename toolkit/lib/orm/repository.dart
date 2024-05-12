@@ -17,9 +17,9 @@ class Repository<T extends Model> {
   void create({ifNotExists = true}) {
     CommonDatabase? database = dbUtil.database;
     if (null == database) return;
-    CreateScheme createScheme = name.createScheme.ifNotExists(ifNotExists).columns(model.attributes.list.map((e) {
+    CreateScheme createScheme = name.createScheme.ifNotExists(ifNotExists).columns(model.fields.list.map((e) {
           Column col = e.column;
-          if (e.name == 'id') col.isPrimary = true;
+          if (e.isPrimary) col.isPrimary = true;
           return col;
         }).toList());
     String sql = createScheme.sql;
@@ -31,8 +31,53 @@ class Repository<T extends Model> {
   void insert(T data, {Transaction? tx}) {
     CommonDatabase? database = dbUtil.database;
     if (null == database) return;
-    InsertScheme insertScheme = InsertScheme().into(name).values(data.attributes.list.map((attribute) => attribute.raw).toList());
+    InsertScheme insertScheme = InsertScheme().into(name).values(data.fields.list.map((field) => field.raw).toList());
     String sql = insertScheme.sql;
+    logUtil.debug(sql);
+    database.execute(sql);
+  }
+
+  /// 删除数据
+  void deleteById(T data, {Transaction? tx, soft = true}) {
+    CommonDatabase? database = dbUtil.database;
+    if (null == database) return;
+
+    void buildCondition(ConditionGroup group) {
+      group.append(model.key.equals(data.key.value));
+    }
+
+    String sql;
+    if (soft) {
+      UpdateScheme updateScheme = UpdateScheme().update(model.deleteFlag.update(true)).from(name.from).where(buildCondition);
+      sql = updateScheme.sql;
+    } else {
+      DeleteScheme deleteScheme = DeleteScheme().from(name.from).where(buildCondition);
+      sql = deleteScheme.sql;
+    }
+    logUtil.debug(sql);
+    database.execute(sql);
+  }
+
+  /// 删除数据 按照data的属性匹配 忽略空值和审计字段
+  void delete(T data, {Transaction? tx, soft = true}) {
+    CommonDatabase? database = dbUtil.database;
+    if (null == database) return;
+
+    void buildCondition(ConditionGroup group) {
+      for (Field field in data.fields.list) {
+        if (field.isAuditField || field.isDeleteField) continue;
+        group.append(field.equals(field.value));
+      }
+    }
+
+    String sql;
+    if (soft) {
+      UpdateScheme updateScheme = UpdateScheme().update(model.deleteFlag.update(true)).from(name.from).where(buildCondition);
+      sql = updateScheme.sql;
+    } else {
+      DeleteScheme deleteScheme = DeleteScheme().from(name.from).where(buildCondition);
+      sql = deleteScheme.sql;
+    }
     logUtil.debug(sql);
     database.execute(sql);
   }
@@ -43,7 +88,7 @@ class Repository<T extends Model> {
   T? findById(String id, {Transaction? tx, clear = true}) {
     T model = this.model;
     QueryScheme scheme = QueryScheme().selectAll().from(name.from).where((group) {
-      group.append(model.id.equals(id));
+      group.append(model.key.equals(id));
     });
     return find(scheme, tx: tx, clear: clear)?.firstOrNull;
   }
@@ -54,7 +99,7 @@ class Repository<T extends Model> {
   T? findByIdList(List<String> idList, {Transaction? tx, clear = true}) {
     T model = this.model;
     QueryScheme scheme = QueryScheme().selectAll().from(name.from).where((group) {
-      group.append(model.id.inList(idList));
+      group.append(model.key.inList(idList));
     });
     return find(scheme, tx: tx, clear: clear)?.firstOrNull;
   }
@@ -83,7 +128,7 @@ class Repository<T extends Model> {
     List<T> resultModel = resultSet.map((row) {
       T t;
       T tempT = model;
-      String id = row[tempT.id.name];
+      String id = row[tempT.key.name];
       if (_ModelCache.has(id)) {
         t = _ModelCache.get(id) as T;
       } else {
@@ -93,23 +138,23 @@ class Repository<T extends Model> {
       // 按列处理单行数据
       row.forEach((key, value) {
         if (null == value) return;
-        Attribute? attribute = t.attributes.get(key);
-        if (null == attribute) return;
+        Field? field = t.fields.get(key);
+        if (null == field) return;
         // 数据库数据转换为模型数据
-        attribute.fromRaw(value);
-        Type type = attribute.type;
+        field.fromRaw(value);
+        Type type = field.type;
         // 关联模型获取
-        if (attribute is ModelAttribute) {
+        if (field is ModelField) {
           Set<String> idList = subModelIdList.putIfAbsent(type, () => {});
-          String? subId = attribute.value?.id.value;
+          String? subId = field.value?.key.value;
           if (null == subId) return;
           if (_ModelCache.has(subId)) return;
           idList.add(subId);
         }
-        if (attribute is ModelListAttribute) {
+        if (field is ModelListField) {
           Set<String> idList = subModelIdList.putIfAbsent(type, () => {});
-          for (Model sub in attribute.value) {
-            String? subId = sub.id.value;
+          for (Model sub in field.value) {
+            String? subId = sub.key.value;
             if (null == subId) continue;
             if (_ModelCache.has(subId)) continue;
             idList.add(subId);
@@ -138,7 +183,7 @@ class _ModelCache {
 
   /// 放置缓存
   static void put(Model model) {
-    String? id = model.id.value;
+    String? id = model.key.value;
     if (id == null) return;
     _cache[id] = model;
   }
@@ -150,24 +195,24 @@ class _ModelCache {
   static Model? get<T extends Model>(String id) => _cache[id];
 }
 
-extension _ListAttributeEx on ListAttribute {}
+extension _ListFieldEx on ListField {}
 
-extension _AttributeEx on Attribute {
+extension _FieldEx on Field {
   dynamic get raw {
     if (null == value) return null;
     return switch (this) {
-      BooleanAttribute() => value ? 1 : 0,
-      DateTimeAttribute() => (value as DateTime).millisecondsSinceEpoch,
-      StringAttribute() => value,
-      ModelAttribute() => (value as Model).id.raw,
-      IntegerAttribute() => value,
-      FloatAttribute() => value,
-      BooleanListAttribute() => _encode((e) => e ? 1 : 0),
-      DateTimeListAttribute() => _encode((e) => (e as DateTime).millisecondsSinceEpoch),
-      StringListAttribute() => _encode((e) => e),
-      ModelListAttribute() => _encode((e) => (e as Model).id.raw),
-      IntegerListAttribute() => _encode((e) => e),
-      FloatListAttribute() => _encode((e) => e),
+      BooleanField() => value ? 1 : 0,
+      DateTimeField() => (value as DateTime).millisecondsSinceEpoch,
+      StringField() => value,
+      ModelField() => (value as Model).key.raw,
+      IntegerField() => value,
+      FloatField() => value,
+      BooleanListField() => _encode((e) => e ? 1 : 0),
+      DateTimeListField() => _encode((e) => (e as DateTime).millisecondsSinceEpoch),
+      StringListField() => _encode((e) => e),
+      ModelListField() => _encode((e) => (e as Model).key.raw),
+      IntegerListField() => _encode((e) => e),
+      FloatListField() => _encode((e) => e),
     };
   }
 
@@ -181,38 +226,38 @@ extension _AttributeEx on Attribute {
       return;
     }
     switch (this) {
-      case BooleanAttribute():
+      case BooleanField():
         this.value = value == 0 ? false : true;
         break;
-      case DateTimeAttribute():
+      case DateTimeField():
         this.value = DateTime.fromMillisecondsSinceEpoch(value);
         break;
-      case ModelAttribute():
+      case ModelField():
         Model? model = modelRegistry.getByType(type)?.call();
-        model?.id.value = value;
+        model?.key.value = value;
         this.value = model;
         break;
-      case StringAttribute():
-      case IntegerAttribute():
-      case FloatAttribute():
+      case StringField():
+      case IntegerField():
+      case FloatField():
         this.value = value;
         break;
-      case BooleanListAttribute():
+      case BooleanListField():
         this.value = _decode(value, (e) => e == 0 ? false : true);
         break;
-      case DateTimeListAttribute():
+      case DateTimeListField():
         this.value = _decode(value, (e) => DateTime.fromMillisecondsSinceEpoch(e));
         break;
-      case ModelListAttribute():
+      case ModelListField():
         this.value = _decode(value, (e) {
           Model? model = modelRegistry.getByType(type)?.call();
-          model?.id.value = e;
+          model?.key.value = e;
           return model;
         });
         break;
-      case StringListAttribute():
-      case IntegerListAttribute():
-      case FloatListAttribute():
+      case StringListField():
+      case IntegerListField():
+      case FloatListField():
         this.value = _decode(value, (e) => e);
     }
   }

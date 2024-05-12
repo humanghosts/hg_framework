@@ -1,219 +1,250 @@
 /// 模型
 abstract class Model {
   /// 主键
-  late final Attribute<String?> id;
+  late final Field<String?> key;
+
+  /// 删除标识
+  late final Field<bool> deleteFlag;
+
+  /// 创建时间
+  late final Field<DateTime> createTime;
+
+  /// 更新时间
+  late final Field<DateTime> updateTime;
 
   /// 模型属性
-  late final Attributes attributes;
+  late final Fields fields;
 
   Model({String? id}) {
-    attributes = Attributes(this);
-    this.id = attributes.string(name: 'id', value: id);
+    fields = Fields(this);
+    key = fields.string(name: 'key', value: id)..isPrimary = true;
+    deleteFlag = fields.boolean(name: "deleteFlag", value: false);
+    // 当前时间
+    DateTime now = DateTime.now();
+    createTime = fields.datetime(name: "createTime", value: now.copyWith());
+    updateTime = fields.datetime(name: "createTime", value: now.copyWith());
   }
 
   /// 设置值
   Model set(String key, dynamic value) {
-    attributes.get(key)?.value = value;
+    fields.get(key)?.value = value;
     return this;
   }
 
   /// 获取值
-  T? get<T>(String key) => attributes.get(key)?.value as T?;
+  T? get<T>(String key) => fields.get(key)?.value as T?;
+
+  /// 审计属性
+  List<Field> get auditFields => [createTime, updateTime];
+
+  /// 删除字段
+  List<Field> get deleteFields => [deleteFlag];
 }
 
 /// 属性
-sealed class Attribute<T> {
+sealed class Field<T> {
   /// 属性的值
   T value;
 
   /// 属性名称
   String name;
 
-  /// 值
-  Attributes attributes;
+  /// 属性集合
+  Fields fields;
 
-  Attribute(
-    this.attributes, {
+  /// 是否是主键
+  bool isPrimary;
+
+  Field(
+    this.fields, {
     required this.value,
     required this.name,
+    this.isPrimary = false,
   }) {
-    attributes._map[name] = this;
+    fields._map[name] = this;
   }
 
+  /// 字段类型
   Type get type => T;
+
+  /// 是否是审计字段
+  bool get isAuditField => fields.parent.auditFields.contains(this);
+
+  /// 是否是删除字段
+  bool get isDeleteField => fields.parent.deleteFields.contains(this);
 }
 
 /// 列表类型
-sealed class ListAttribute<T> extends Attribute<List<T>> {
-  ListAttribute(super.attributes, {required super.name, required super.value});
+sealed class ListField<T> extends Field<List<T>> {
+  ListField(super.fields, {required super.name, required super.value});
 }
 
 /// 布尔类型的值
-class BooleanAttribute<T extends bool?> extends Attribute<T> {
-  BooleanAttribute(super.attributes, {required super.value, required super.name});
+class BooleanField<T extends bool?> extends Field<T> {
+  BooleanField(super.fields, {required super.value, required super.name});
 }
 
-class BooleanListAttribute<T extends bool> extends ListAttribute<T> {
-  BooleanListAttribute(super.attributes, {required super.name, required super.value});
+class BooleanListField<T extends bool> extends ListField<T> {
+  BooleanListField(super.fields, {required super.name, required super.value});
 }
 
 /// 时间类型
-class DateTimeAttribute<T extends DateTime?> extends Attribute<T> {
-  DateTimeAttribute(super.attributes, {required super.value, required super.name});
+class DateTimeField<T extends DateTime?> extends Field<T> {
+  DateTimeField(super.fields, {required super.value, required super.name});
 }
 
-class DateTimeListAttribute<T extends DateTime> extends ListAttribute<T> {
-  DateTimeListAttribute(super.attributes, {required super.name, required super.value});
+class DateTimeListField<T extends DateTime> extends ListField<T> {
+  DateTimeListField(super.fields, {required super.name, required super.value});
 }
 
 /// 数字类型属性
-sealed class NumberAttribute<T extends num?> extends Attribute<T> {
-  NumberAttribute(super.attributes, {required super.value, required super.name});
+sealed class NumberField<T extends num?> extends Field<T> {
+  NumberField(super.fields, {required super.value, required super.name});
 }
 
-sealed class NumberListAttribute<T extends num> extends ListAttribute<T> {
-  NumberListAttribute(super.attributes, {required super.name, required super.value});
+sealed class NumberListField<T extends num> extends ListField<T> {
+  NumberListField(super.fields, {required super.name, required super.value});
 }
 
 /// 整型
-class IntegerAttribute<T extends int?> extends NumberAttribute<T> {
-  IntegerAttribute(super.attributes, {required super.value, required super.name});
+class IntegerField<T extends int?> extends NumberField<T> {
+  IntegerField(super.fields, {required super.value, required super.name});
 }
 
-class IntegerListAttribute<T extends int> extends NumberListAttribute<T> {
-  IntegerListAttribute(super.attributes, {required super.name, required super.value});
+class IntegerListField<T extends int> extends NumberListField<T> {
+  IntegerListField(super.fields, {required super.name, required super.value});
 }
 
 /// 浮点型
-class FloatAttribute<T extends double?> extends NumberAttribute<T> {
-  FloatAttribute(super.attributes, {required super.value, required super.name});
+class FloatField<T extends double?> extends NumberField<T> {
+  FloatField(super.fields, {required super.value, required super.name});
 }
 
-class FloatListAttribute<T extends double> extends NumberListAttribute<T> {
-  FloatListAttribute(super.attributes, {required super.name, required super.value});
+class FloatListField<T extends double> extends NumberListField<T> {
+  FloatListField(super.fields, {required super.name, required super.value});
 }
 
 /// 字符串类型属性
-class StringAttribute<T extends String?> extends Attribute<T> {
-  StringAttribute(super.attributes, {required super.value, required super.name});
+class StringField<T extends String?> extends Field<T> {
+  StringField(super.fields, {required super.value, required super.name});
 }
 
-class StringListAttribute<T extends String> extends ListAttribute<T> {
-  StringListAttribute(super.attributes, {required super.name, required super.value});
+class StringListField<T extends String> extends ListField<T> {
+  StringListField(super.fields, {required super.name, required super.value});
 }
 
 /// 模型
-class ModelAttribute<T extends Model?> extends Attribute<T> {
-  ModelAttribute(super.attributes, {required super.value, required super.name});
+class ModelField<T extends Model?> extends Field<T> {
+  ModelField(super.fields, {required super.value, required super.name});
 }
 
-class ModelListAttribute<T extends Model> extends ListAttribute<T> {
-  ModelListAttribute(super.attributes, {required super.name, required super.value});
+class ModelListField<T extends Model> extends ListField<T> {
+  ModelListField(super.fields, {required super.name, required super.value});
 }
 
 /// 属性集合
-class Attributes {
+class Fields {
   /// 名称:属性 映射
-  final Map<String, Attribute> _map = {};
+  final Map<String, Field> _map = {};
 
   /// 模型
   final Model _model;
 
   /// 构造方法
-  Attributes(Model model) : _model = model;
+  Fields(Model model) : _model = model;
 
   /// 获取模型
   Model get parent => _model;
 
   /// 通过名称获取某个属性
-  Attribute? get(String? name) => _map[name];
+  Field? get(String? name) => _map[name];
 
   /// 获取所有属性
-  List<Attribute> get list => List.unmodifiable(_map.values);
+  List<Field> get list => List.unmodifiable(_map.values);
 
   /// 以map形式获取所有属性
-  Map<String, Attribute> get map => Map.unmodifiable(_map);
+  Map<String, Field> get map => Map.unmodifiable(_map);
 
   /// 整型字段
-  IntegerAttribute<T> integer<T extends int?>({required String name, required T value}) {
-    IntegerAttribute<T> attribute = IntegerAttribute<T>(this, value: value, name: name);
+  IntegerField<T> integer<T extends int?>({required String name, required T value}) {
+    IntegerField<T> attribute = IntegerField<T>(this, value: value, name: name);
     _map[name] = attribute;
     return attribute;
   }
 
   /// 整型列表
-  IntegerListAttribute<T> integerList<T extends int>({required String name, List<T>? value}) {
-    IntegerListAttribute<T> attribute = IntegerListAttribute<T>(this, value: value ?? [], name: name);
+  IntegerListField<T> integerList<T extends int>({required String name, List<T>? value}) {
+    IntegerListField<T> attribute = IntegerListField<T>(this, value: value ?? [], name: name);
     _map[name] = attribute;
     return attribute;
   }
 
   /// 浮点型字段
-  FloatAttribute<T> float<T extends double?>({required String name, required T value}) {
-    FloatAttribute<T> attribute = FloatAttribute<T>(this, value: value, name: name);
+  FloatField<T> float<T extends double?>({required String name, required T value}) {
+    FloatField<T> attribute = FloatField<T>(this, value: value, name: name);
     _map[name] = attribute;
     return attribute;
   }
 
   /// 浮点型列表
-  FloatListAttribute<T> floatList<T extends double>({required String name, List<T>? value}) {
-    FloatListAttribute<T> attribute = FloatListAttribute<T>(this, value: value ?? [], name: name);
+  FloatListField<T> floatList<T extends double>({required String name, List<T>? value}) {
+    FloatListField<T> attribute = FloatListField<T>(this, value: value ?? [], name: name);
     _map[name] = attribute;
     return attribute;
   }
 
   /// 字符串字段
-  StringAttribute<T> string<T extends String?>({required String name, required T value}) {
-    StringAttribute<T> attribute = StringAttribute<T>(this, value: value, name: name);
+  StringField<T> string<T extends String?>({required String name, required T value}) {
+    StringField<T> attribute = StringField<T>(this, value: value, name: name);
     _map[name] = attribute;
     return attribute;
   }
 
   /// 字符串列表
-  StringListAttribute<T> stringList<T extends String>({required String name, List<T>? value}) {
-    StringListAttribute<T> attribute = StringListAttribute<T>(this, value: value ?? [], name: name);
+  StringListField<T> stringList<T extends String>({required String name, List<T>? value}) {
+    StringListField<T> attribute = StringListField<T>(this, value: value ?? [], name: name);
     _map[name] = attribute;
     return attribute;
   }
 
   /// 布尔字段
-  BooleanAttribute<T> boolean<T extends bool?>({required String name, required T value}) {
-    BooleanAttribute<T> attribute = BooleanAttribute<T>(this, value: value, name: name);
+  BooleanField<T> boolean<T extends bool?>({required String name, required T value}) {
+    BooleanField<T> attribute = BooleanField<T>(this, value: value, name: name);
     _map[name] = attribute;
     return attribute;
   }
 
   /// 布尔列表
-  BooleanListAttribute<T> booleanList<T extends bool>({required String name, List<T>? value}) {
-    BooleanListAttribute<T> attribute = BooleanListAttribute<T>(this, value: value ?? [], name: name);
+  BooleanListField<T> booleanList<T extends bool>({required String name, List<T>? value}) {
+    BooleanListField<T> attribute = BooleanListField<T>(this, value: value ?? [], name: name);
     _map[name] = attribute;
     return attribute;
   }
 
   /// 日期时间字段
-  DateTimeAttribute<T> datetime<T extends DateTime?>({required String name, required T value}) {
-    DateTimeAttribute<T> attribute = DateTimeAttribute<T>(this, value: value, name: name);
+  DateTimeField<T> datetime<T extends DateTime?>({required String name, required T value}) {
+    DateTimeField<T> attribute = DateTimeField<T>(this, value: value, name: name);
     _map[name] = attribute;
     return attribute;
   }
 
   /// 日期时间列表
-  DateTimeListAttribute<T> datetimeList<T extends DateTime>({required String name, List<T>? value}) {
-    DateTimeListAttribute<T> attribute = DateTimeListAttribute<T>(this, value: value ?? [], name: name);
+  DateTimeListField<T> datetimeList<T extends DateTime>({required String name, List<T>? value}) {
+    DateTimeListField<T> attribute = DateTimeListField<T>(this, value: value ?? [], name: name);
     _map[name] = attribute;
     return attribute;
   }
 
   /// 模型字段
-  ModelAttribute<T> model<T extends Model?>({required String name, required T value}) {
-    ModelAttribute<T> attribute = ModelAttribute<T>(this, value: value, name: name);
+  ModelField<T> model<T extends Model?>({required String name, required T value}) {
+    ModelField<T> attribute = ModelField<T>(this, value: value, name: name);
     _map[name] = attribute;
     return attribute;
   }
 
   /// 日期时间列表
-  ModelListAttribute<T> modelList<T extends Model>({required String name, List<T>? value}) {
-    ModelListAttribute<T> attribute = ModelListAttribute<T>(this, value: value ?? [], name: name);
+  ModelListField<T> modelList<T extends Model>({required String name, List<T>? value}) {
+    ModelListField<T> attribute = ModelListField<T>(this, value: value ?? [], name: name);
     _map[name] = attribute;
     return attribute;
   }

@@ -1,5 +1,6 @@
 part of '../orm.dart';
 
+/// 拼sql工具
 extension SqlStringBufferEx on StringBuffer {
   StringBuffer writeEndSpace(dynamic value) {
     if (null == value) return this;
@@ -13,6 +14,7 @@ extension SqlStringBufferEx on StringBuffer {
   }
 }
 
+/// 拼sql工具
 extension _SqlListEx<E extends _Sqlable> on List<E> {
   /// copy from [join]
   String sqlJoin([String separator = " "]) {
@@ -36,15 +38,15 @@ extension _SqlListEx<E extends _Sqlable> on List<E> {
   }
 }
 
+/// 字符串的扩展，用于创建表
 extension CreateStringEx on String {
   CreateScheme get createScheme => CreateScheme(this);
 
   Column get column => Column(name: this, type: ColumnType.NULL);
 }
 
+/// 字符串扩展 用于创建查询语句
 extension QueryStringEx on String {
-  UpdateField update(dynamic value) => UpdateField(this, value);
-
   QueryField get field => QueryField(this);
 
   From get from => From(this);
@@ -66,30 +68,35 @@ extension QueryStringEx on String {
   Condition inList(List<dynamic> value) => ConditionItemIn(this, value);
 }
 
-extension CreateAttributeEx on Attribute {
+/// 字符串扩展，用于创建更新语句
+extension UpdateStringEx on String {
+  UpdateField update(dynamic value) => UpdateField(this, value);
+}
+
+/// 字段扩展 用于创建表语句 调用字符串的扩展
+extension CreateFieldEx on Field {
   Column get column => name.column..type = columnType;
 
   ColumnType get columnType {
     return switch (this) {
-      BooleanAttribute<bool?>() => ColumnType.INTEGER,
-      DateTimeAttribute<DateTime?>() => ColumnType.INTEGER,
-      StringAttribute<String?>() => ColumnType.TEXT,
-      ModelAttribute<Model?>() => ColumnType.TEXT,
-      BooleanListAttribute<bool>() => ColumnType.TEXT,
-      DateTimeListAttribute<DateTime>() => ColumnType.TEXT,
-      StringListAttribute<String>() => ColumnType.TEXT,
-      ModelListAttribute<Model>() => ColumnType.TEXT,
-      IntegerAttribute<int?>() => ColumnType.INTEGER,
-      FloatAttribute<double?>() => ColumnType.REAL,
-      IntegerListAttribute<int>() => ColumnType.TEXT,
-      FloatListAttribute<double>() => ColumnType.TEXT,
+      BooleanField<bool?>() => ColumnType.INTEGER,
+      DateTimeField<DateTime?>() => ColumnType.INTEGER,
+      StringField<String?>() => ColumnType.TEXT,
+      ModelField<Model?>() => ColumnType.TEXT,
+      BooleanListField<bool>() => ColumnType.TEXT,
+      DateTimeListField<DateTime>() => ColumnType.TEXT,
+      StringListField<String>() => ColumnType.TEXT,
+      ModelListField<Model>() => ColumnType.TEXT,
+      IntegerField<int?>() => ColumnType.INTEGER,
+      FloatField<double?>() => ColumnType.REAL,
+      IntegerListField<int>() => ColumnType.TEXT,
+      FloatListField<double>() => ColumnType.TEXT,
     };
   }
 }
 
-extension QueryAttributeEx on Attribute {
-  UpdateField update(dynamic value) => name.update(value);
-
+/// 字段扩展 用于查询，调用字段名称的字符串扩展
+extension QueryFieldEx on Field {
   QueryField get field => name.field;
 
   QueryOrder get orderBy => desc;
@@ -107,4 +114,9 @@ extension QueryAttributeEx on Attribute {
   Condition notEquals(dynamic value) => name.notEquals(value);
 
   Condition inList(List<dynamic> value) => name.inList(value);
+}
+
+/// 字段扩展 用于更新，调用字段名称的字符串扩展
+extension UpdateFieldEx on Field {
+  UpdateField update(dynamic value) => name.update(value);
 }
